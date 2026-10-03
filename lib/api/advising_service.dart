@@ -817,7 +817,7 @@ class AdvisingAutoEngine extends ChangeNotifier {
 
         if (remaining <= 0) {
           item.status = TargetSectionStatus.skippedZeroSeats;
-          item.message = '0 seats remaining (Checked)';
+          item.message = null;
           notifyListeners();
           continue;
         }

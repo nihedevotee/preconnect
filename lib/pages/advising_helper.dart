@@ -1038,7 +1038,11 @@ class _AdvisingHelperPageState extends State<AdvisingHelperPage> {
                 ? null
                 : 'Priority $replacementPriority • replaces '
                       '${replacement.courseCode} Sec ${replacement.sectionName}',
-            statusMessage: item.message,
+            statusMessage:
+                (item.status == TargetSectionStatus.failed ||
+                    item.status == TargetSectionStatus.adding)
+                ? item.message
+                : null,
             isError: item.status == TargetSectionStatus.failed,
             action: isAdding
                 ? const Padding(
