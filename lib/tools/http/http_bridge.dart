@@ -49,7 +49,7 @@ class ConnectExtensionClient extends http.BaseClient {
       );
     });
 
-    timeoutTimer = Timer(const Duration(seconds: 30), () {
+    timeoutTimer = Timer(const Duration(seconds: 10), () {
       subscription?.cancel();
       if (!completer.isCompleted) {
         completer.completeError(

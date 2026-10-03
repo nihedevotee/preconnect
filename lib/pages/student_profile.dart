@@ -142,6 +142,12 @@ class _StudentProfileState extends State<StudentProfile>
         _progressSummary = null;
       });
       unawaited(_refreshProfile(notify: false));
+      return;
+    }
+    if (reason == 'cache_cleared' ||
+        reason == 'mercure_event' ||
+        reason == 'home_dashboard') {
+      unawaited(_refreshProfile(notify: false));
     }
   }
 

@@ -16,6 +16,7 @@ import 'package:preconnect/tools/preconnect_constants.dart';
 import 'package:preconnect/tools/token_storage.dart';
 import 'package:preconnect/api/fcm.dart';
 import 'package:preconnect/tools/ramadan.dart';
+import 'package:preconnect/tools/refresh_bus.dart';
 import 'package:preconnect/pages/shared_widgets/faculty_sheet.dart';
 import 'package:preconnect/pages/shared_widgets/seat_filters.dart';
 part 'shared_widgets/seat_status.dart';
@@ -70,7 +71,7 @@ class SeatStatusPage extends StatefulWidget {
 }
 
 class _SeatStatusPageState extends State<SeatStatusPage>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, RefreshBusState {
   static const String _pinScope = 'seat_status';
   final SeatStatusService _service = SeatStatusService();
   final List<_SeatStatusCardData> _cards = <_SeatStatusCardData>[];
@@ -117,6 +118,7 @@ class _SeatStatusPageState extends State<SeatStatusPage>
     unawaited(_refreshDetailsFromApi());
     WidgetsBinding.instance.addObserver(this);
     HomeTabRegistry.activeTab.addListener(_onActiveTabChanged);
+    bindRefreshBus(_onRefreshSignal);
   }
 
   Future<void> _loadArchiveSemesters() async {
@@ -171,6 +173,7 @@ class _SeatStatusPageState extends State<SeatStatusPage>
 
   @override
   void dispose() {
+    unbindRefreshBus(_onRefreshSignal);
     WidgetsBinding.instance.removeObserver(this);
     HomeTabRegistry.activeTab.removeListener(_onActiveTabChanged);
     _searchDebounce?.cancel();
@@ -187,6 +190,18 @@ class _SeatStatusPageState extends State<SeatStatusPage>
   void _onActiveTabChanged() {
     if (!mounted) return;
     _refreshIfActive();
+  }
+
+  void _onRefreshSignal() {
+    if (!mounted) return;
+    if (_selectedArchive.isNotEmpty) return;
+    final reason = refreshBusReason;
+    if (reason == 'seat_status' ||
+        reason == 'mercure_event' ||
+        reason == 'cache_cleared' ||
+        reason == 'home_dashboard') {
+      unawaited(_refreshDetailsFromApi());
+    }
   }
 
   void _updateSeatStatusState(VoidCallback update) {

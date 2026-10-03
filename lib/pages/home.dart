@@ -176,6 +176,18 @@ class _HomePageState extends State<HomePage> {
     });
     HomeTabRegistry.setActive(tab);
     unawaited(_persistSelectedTab(tab));
+    final activeReason = switch (tab) {
+      HomeTab.studentSchedule => 'class_schedule',
+      HomeTab.examSchedule => 'exam_schedule',
+      HomeTab.profile => 'student_profile',
+      HomeTab.dashboard => 'home_dashboard',
+      HomeTab.degreeProgress => 'degree_progress',
+      HomeTab.notifications => 'notifications',
+      _ => null,
+    };
+    if (activeReason != null) {
+      RefreshBus.instance.notify(reason: activeReason);
+    }
     if (shouldJumpClass || shouldJumpExam) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || selectedTab != tab) return;

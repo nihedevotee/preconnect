@@ -136,6 +136,7 @@ class MercureService {
       if (type.isNotEmpty) {
         unawaited(AppLog.write('Mercure SSE: Received event type: $type'));
         RefreshBus.instance.notify(reason: type);
+        RefreshBus.instance.notify(reason: 'mercure_event');
         return;
       }
     }
@@ -153,7 +154,7 @@ class MercureService {
 
   void _scheduleReconnect() {
     _reconnectTimer?.cancel();
-    _reconnectTimer = Timer(const Duration(seconds: 10), () {
+    _reconnectTimer = Timer(const Duration(seconds: 3), () {
       connect();
     });
   }

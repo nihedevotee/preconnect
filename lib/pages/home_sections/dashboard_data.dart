@@ -136,15 +136,66 @@ class _HomeDashboardState extends State<_HomeDashboard> with RefreshBusState {
       final raw = AppStorage.instance.getStringSync(
         _homeDashboardSnapshotCacheKey,
       );
-      if (raw == null || raw.isEmpty) return null;
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map) return null;
-      final cached = _HomeData.fromCache(Map<String, dynamic>.from(decoded));
-      if (cached == null) return null;
-      return _withCurrentVisibilitySync(cached);
-    } catch (_) {
-      return null;
-    }
+      if (raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) {
+          final cached = _HomeData.fromCache(
+            Map<String, dynamic>.from(decoded),
+          );
+          if (cached != null) {
+            return _withCurrentVisibilitySync(cached);
+          }
+        }
+      }
+    } catch (_) {}
+    try {
+      final storage = AppStorage.instance;
+      final fullName = storage.getStringSync(StorageKeys.fullName);
+      final studentId = storage.getStringSync(StorageKeys.studentId);
+      if ((fullName != null && fullName.trim().isNotEmpty) ||
+          (studentId != null && studentId.trim().isNotEmpty)) {
+        final profile = <String, String?>{
+          'fullName': fullName,
+          'studentId': studentId,
+          'studentEmail': storage.getStringSync(StorageKeys.studentEmail),
+          'shortCode': storage.getStringSync(StorageKeys.shortCode),
+          'program': storage.getStringSync(StorageKeys.program),
+          'departmentName': storage.getStringSync(StorageKeys.departmentName),
+          'currentSemester': storage.getStringSync(StorageKeys.currentSemester),
+          'currentSessionSemesterId': storage.getStringSync(
+            StorageKeys.currentSessionSemesterId,
+          ),
+          'cgpa': storage.getStringSync(StorageKeys.cgpa),
+          'earnedCredit': storage.getStringSync(StorageKeys.earnedCredit),
+          'mobileNo': storage.getStringSync(StorageKeys.mobileNo),
+          'photoFilePath': storage.getStringSync(StorageKeys.photoFilePath),
+        };
+        final photoUrl = ApiConfig.photoUrl(profile['photoFilePath']);
+        final scheduleJson = storage.getStringSync(StorageKeys.studentSchedule);
+        final sections = section.parseSectionsFromScheduleJson(scheduleJson);
+        final entries = _ScheduleEntry.buildEntries(
+          sections: sections,
+          overrides: const <String, ExamScheduleOverride>{},
+          isRamadan: false,
+        );
+        final fallbackData = _HomeData(
+          profile: profile,
+          entries: entries,
+          photoUrl: photoUrl,
+          sections: sections,
+          examOverrides: const <String, ExamScheduleOverride>{},
+          personalSchedules: const <CustomSchedule>[],
+          isRamadan: false,
+          ramadan: const RamadanStatus(isRamadan: false),
+          holiday: HolidayStatus.empty,
+          cardVisibility: HomeCardPreferences.loadSync(),
+          scheduleJson: scheduleJson,
+          advisingInfo: null,
+        );
+        return fallbackData;
+      }
+    } catch (_) {}
+    return null;
   }
 
   void _loadHomeDashboardSnapshotSync() {
@@ -255,18 +306,11 @@ class _HomeDashboardState extends State<_HomeDashboard> with RefreshBusState {
 
   void _onRefreshSignal() {
     if (!mounted) return;
-    if (isRefreshingFrom('home_dashboard')) {
-      return;
-    }
     if (isRefreshingFrom('home_card_settings_changed')) {
       unawaited(_reloadCardVisibilityOnly());
       return;
     }
-    if (isRefreshingFrom('cache_cleared')) {
-      unawaited(_handleRefresh(notify: false));
-      return;
-    }
-    unawaited(_handleRefresh(notify: false));
+    unawaited(_backgroundRefresh(ignoreMinInterval: true));
   }
 
   Future<void> _reloadCardVisibilityOnly() async {
@@ -350,7 +394,35 @@ class _HomeDashboardState extends State<_HomeDashboard> with RefreshBusState {
         holidayFuture,
       ]);
 
-      final profile = results[0] as Map<String, String?>?;
+      var profile = results[0] as Map<String, String?>?;
+      if (profile == null ||
+          ((profile['studentId'] ?? '').trim().isEmpty &&
+              (profile['fullName'] ?? '').trim().isEmpty)) {
+        final storage = AppStorage.instance;
+        final fullName = storage.getStringSync(StorageKeys.fullName);
+        final studentId = storage.getStringSync(StorageKeys.studentId);
+        if ((fullName != null && fullName.trim().isNotEmpty) ||
+            (studentId != null && studentId.trim().isNotEmpty)) {
+          profile = <String, String?>{
+            'fullName': fullName,
+            'studentId': studentId,
+            'studentEmail': storage.getStringSync(StorageKeys.studentEmail),
+            'shortCode': storage.getStringSync(StorageKeys.shortCode),
+            'program': storage.getStringSync(StorageKeys.program),
+            'departmentName': storage.getStringSync(StorageKeys.departmentName),
+            'currentSemester': storage.getStringSync(
+              StorageKeys.currentSemester,
+            ),
+            'currentSessionSemesterId': storage.getStringSync(
+              StorageKeys.currentSessionSemesterId,
+            ),
+            'cgpa': storage.getStringSync(StorageKeys.cgpa),
+            'earnedCredit': storage.getStringSync(StorageKeys.earnedCredit),
+            'mobileNo': storage.getStringSync(StorageKeys.mobileNo),
+            'photoFilePath': storage.getStringSync(StorageKeys.photoFilePath),
+          };
+        }
+      }
       final personalSchedules = results[1] as List<CustomSchedule>;
       final advisingInfo = results[2] as Map<String, String?>?;
       final sections = results[3] as List<section.Section>;

@@ -91,25 +91,8 @@ extension _HomeDashboardView on _HomeDashboardState {
                               data?.cardVisibility ??
                               HomeCardPreferences.defaults;
                           final fullName = (profile['fullName'] ?? '').trim();
-                          final hasOverviewProfileData =
-                              (profile['studentId'] ?? '').trim().isNotEmpty ||
-                              (profile['shortCode'] ?? '').trim().isNotEmpty ||
-                              (profile['departmentName'] ?? '')
-                                  .trim()
-                                  .isNotEmpty ||
-                              (profile['currentSemester'] ?? '')
-                                  .trim()
-                                  .isNotEmpty ||
-                              (profile['currentSessionSemesterId'] ?? '')
-                                  .trim()
-                                  .isNotEmpty;
-                          final isOverviewLoading =
-                              data == null || !hasOverviewProfileData;
-                          final hasTopBarData =
-                              fullName.isNotEmpty ||
-                              (photoUrl ?? '').trim().isNotEmpty;
-                          final isTopBarLoading =
-                              data == null || !hasTopBarData;
+                          final isOverviewLoading = data == null;
+                          final isTopBarLoading = data == null;
                           final isTodayScheduleLoading =
                               cardVisibility.showTodaySchedule && data == null;
                           final ramadan =

@@ -14,7 +14,6 @@ import 'package:preconnect/tools/build_info.dart';
 import 'package:preconnect/tools/cached_image.dart';
 import 'package:preconnect/tools/cdn_cache.dart';
 import 'package:preconnect/tools/preconnect_constants.dart';
-import 'package:preconnect/tools/token_storage.dart';
 
 const String _githubToken = String.fromEnvironment('GITHUB_TOKEN');
 const String _contributorsRosterUrl =
@@ -336,25 +335,26 @@ class _DevsPageState extends State<DevsPage> {
   Future<void> _onHeaderSecretTap() async {
     if (_isOpeningSecret) return;
     _secretTapCount += 1;
-    if (_secretTapCount < 10) return;
+    if (_secretTapCount < 25) return;
     _secretTapCount = 0;
     if (!mounted) return;
 
     _isOpeningSecret = true;
-    final localAuthEnabled = await AppLockService().isEnabled();
-    _isOpeningSecret = false;
-    if (!mounted) return;
-    if (!localAuthEnabled) return;
-
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        settings: const RouteSettings(
-          name: '/secure_access',
-          arguments: PreConnectRouteTokens.privateAccess,
+    try {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          settings: const RouteSettings(
+            name: '/secure_access',
+            arguments: PreConnectRouteTokens.privateAccess,
+          ),
+          builder: (_) => const ApiTestPage(),
         ),
-        builder: (_) => const ApiTestPage(),
-      ),
-    );
+      );
+    } finally {
+      if (mounted) {
+        _isOpeningSecret = false;
+      }
+    }
   }
 
   @override

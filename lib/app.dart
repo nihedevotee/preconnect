@@ -507,9 +507,13 @@ class _MyAppState extends State<MyApp>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      if (_initialLoggedIn) {
+        unawaited(MercureService().connect());
+      }
       unawaited(_consumePendingShortcutAction());
       unawaited(_refreshAndUnlockIfNeeded());
       unawaited(QuietModeController.instance.refresh());
+      unawaited(triggerAppRefresh(forceRefresh: true));
       return;
     }
     if (state == AppLifecycleState.inactive ||
@@ -525,6 +529,9 @@ class _MyAppState extends State<MyApp>
     final isOnline =
         results.isNotEmpty && results.any((r) => r != ConnectivityResult.none);
     if (isOnline) {
+      if (_initialLoggedIn) {
+        unawaited(MercureService().connect());
+      }
       unawaited(triggerAppRefresh(forceRefresh: true));
     }
   }
@@ -534,7 +541,7 @@ class _MyAppState extends State<MyApp>
     final now = DateTime.now();
     if (!forceRefresh &&
         _lastAppRefreshAt != null &&
-        now.difference(_lastAppRefreshAt!) < const Duration(seconds: 30)) {
+        now.difference(_lastAppRefreshAt!) < const Duration(seconds: 10)) {
       return;
     }
     _appRefreshInFlight = true;
@@ -546,7 +553,7 @@ class _MyAppState extends State<MyApp>
           connectivity.every((r) => r == ConnectivityResult.none);
       if (!isOffline) {
         ApiClient().clearTransientCaches();
-        final activeTab = _resolvedBootstrapState.initialHomeTab;
+        final activeTab = HomeTabRegistry.activeTab.value;
         final activeReason = switch (activeTab) {
           HomeTab.studentSchedule => 'class_schedule',
           HomeTab.examSchedule => 'exam_schedule',
@@ -557,6 +564,9 @@ class _MyAppState extends State<MyApp>
           _ => 'home_dashboard',
         };
         RefreshBus.instance.notify(reason: activeReason);
+        if (activeReason != 'home_dashboard') {
+          RefreshBus.instance.notify(reason: 'home_dashboard');
+        }
       }
     } catch (_) {
     } finally {

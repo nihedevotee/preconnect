@@ -143,7 +143,8 @@ class _DegreeProgressPageState extends State<DegreeProgressPage>
     if (reason != 'home_dashboard' &&
         reason != 'student_profile' &&
         reason != 'auth' &&
-        reason != 'cache_cleared') {
+        reason != 'cache_cleared' &&
+        reason != 'mercure_event') {
       return;
     }
     if (reason == 'auth' || reason == 'cache_cleared') {

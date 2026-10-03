@@ -929,13 +929,6 @@ class _AdvisingHelperPageState extends State<AdvisingHelperPage> {
                         _showAllActivityLogs ? 'Show Less' : 'Show More',
                       ),
                     ),
-                  TextButton(
-                    onPressed: () {
-                      setState(() => _showAllActivityLogs = false);
-                      _engine.clearActivityLogs();
-                    },
-                    child: const Text('Clear Logs'),
-                  ),
                   if (queue.isNotEmpty)
                     TextButton(
                       onPressed: _engine.isRunning
