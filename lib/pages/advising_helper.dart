@@ -78,8 +78,6 @@ class _AdvisingHelperPageState extends State<AdvisingHelperPage> {
   @override
   void dispose() {
     _engine.removeListener(_onEngineChange);
-    _engine.stop();
-    _engine.dispose();
     _enrolledRefreshTimer?.cancel();
     _searchController.dispose();
     super.dispose();
@@ -91,10 +89,11 @@ class _AdvisingHelperPageState extends State<AdvisingHelperPage> {
 
   Future<void> _load() async {
     if (!mounted) return;
-    if (_engine.isRunning) _engine.stop();
     final generation = ++_loadGeneration;
     final phase = _phase;
-    await _engine.loadQueueFromStorage(phase);
+    if (!_engine.isRunning || _engine.tryPhase != phase) {
+      await _engine.loadQueueFromStorage(phase);
+    }
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -145,9 +144,16 @@ class _AdvisingHelperPageState extends State<AdvisingHelperPage> {
       _publicKey = publicKey;
       _sessionId = sessionId;
       _enrolledError = enrolledError;
+      if (_engine.isRunning) {
+        _engine.onSectionAdded = _refreshEnrolled;
+        _engine.onReplacementCompleted = () {
+          if (mounted) setState(() => _replacementSource = null);
+        };
+      }
 
       setState(() {
         _enrolled = enrolled;
+        _engine.enrolledSections = enrolled;
         _seatDetails = seatDetails;
         _isLoading = false;
       });
@@ -187,6 +193,7 @@ class _AdvisingHelperPageState extends State<AdvisingHelperPage> {
         publicKey == _publicKey) {
       setState(() {
         _enrolled = sections;
+        _engine.enrolledSections = sections;
         _enrolledError = null;
       });
     }

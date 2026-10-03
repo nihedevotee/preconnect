@@ -493,9 +493,16 @@ class AdvisingHelperService {
 }
 
 class AdvisingAutoEngine extends ChangeNotifier {
+  static final AdvisingAutoEngine _instance = AdvisingAutoEngine._internal();
+  factory AdvisingAutoEngine() => _instance;
+  AdvisingAutoEngine._internal();
+
+  static AdvisingAutoEngine get instance => _instance;
+
   final AdvisingHelperService _service = AdvisingHelperService();
   final List<TargetSectionItem> targetSections = <TargetSectionItem>[];
   final List<String> activityLogs = <String>[];
+  List<AdvisingSectionRecord> enrolledSections = <AdvisingSectionRecord>[];
 
   bool isRunning = false;
   bool _isTicking = false;
@@ -692,6 +699,7 @@ class AdvisingAutoEngine extends ChangeNotifier {
       ),
     );
     unawaited(AdvisingBackground.setKeepAwake(true));
+    unawaited(AdvisingBackground.requestBatteryOptimizationExemptionIfNeeded());
 
     _loopTimer?.cancel();
     _loopTimer = Timer.periodic(const Duration(milliseconds: 250), (_) {
@@ -836,22 +844,22 @@ class AdvisingAutoEngine extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final enrolled = await _service.fetchAdvisedSections(
-        portfolioId!,
-        phase: phase,
-        publicKey: publicKey!,
-      );
-      if (!isRunning || runGeneration != _runGeneration) return;
-      if (enrolled.any((entry) => entry.sectionId == item.sectionId)) {
-        await _recordSuccess(item);
-        await _refreshEnrolledAfterMutation();
-        return;
-      }
-
-      final replacement =
-          item.replacement ??
-          () {
-            final existing = enrolled.cast<AdvisingSectionRecord?>().firstWhere(
+      var replacement = item.replacement;
+      if (replacement == null) {
+        if (enrolledSections.isEmpty &&
+            portfolioId != null &&
+            publicKey != null) {
+          try {
+            enrolledSections = await _service.fetchAdvisedSections(
+              portfolioId!,
+              phase: phase,
+              publicKey: publicKey!,
+            );
+          } catch (_) {}
+        }
+        final existing = enrolledSections
+            .cast<AdvisingSectionRecord?>()
+            .firstWhere(
               (entry) =>
                   entry != null &&
                   entry.sectionId != item.sectionId &&
@@ -859,21 +867,22 @@ class AdvisingAutoEngine extends ChangeNotifier {
                       item.courseCode.trim().toUpperCase(),
               orElse: () => null,
             );
-            if (existing == null) return null;
-            return AdvisingReplacementSource(
-              sectionId: existing.sectionId,
-              courseCode: existing.courseCode,
-              sectionName: existing.sectionName,
-            );
-          }();
+        if (existing != null) {
+          replacement = AdvisingReplacementSource(
+            sectionId: existing.sectionId,
+            courseCode: existing.courseCode,
+            sectionName: existing.sectionName,
+          );
+        }
+      }
 
       var sourceWasDropped = false;
-      if (replacement != null) {
-        if (enrolled.any((entry) => entry.sectionId == replacement.sectionId)) {
-          addLog(
-            'Dropping ${replacement.courseCode} Sec '
-            '${replacement.sectionName} for replacement',
-          );
+      if (replacement != null && replacement.sectionId > 0) {
+        addLog(
+          'Dropping ${replacement.courseCode} Sec '
+          '${replacement.sectionName} for replacement',
+        );
+        try {
           await _service.dropSection(
             portfolioId: portfolioId!,
             sectionId: replacement.sectionId,
@@ -881,12 +890,7 @@ class AdvisingAutoEngine extends ChangeNotifier {
             phase: phase,
           );
           sourceWasDropped = true;
-        } else {
-          addLog(
-            '${replacement.courseCode} Sec ${replacement.sectionName} '
-            'was already removed; continuing with add',
-          );
-        }
+        } catch (_) {}
       }
 
       var addSucceeded = false;
@@ -908,29 +912,25 @@ class AdvisingAutoEngine extends ChangeNotifier {
             break;
           }
           if (addAttempt < 3) {
-            await Future<void>.delayed(const Duration(milliseconds: 40));
+            await Future<void>.delayed(const Duration(milliseconds: 30));
           }
         }
       }
 
       if (!addSucceeded) {
-        if (sourceWasDropped && replacement != null) {
+        if (sourceWasDropped &&
+            replacement != null &&
+            replacement.sectionId > 0) {
           await _restoreReplacementSource(replacement);
         }
         if (lastAddError != null) {
           throw lastAddError;
         }
+        throw StateError('Connect did not confirm the new enrollment');
       }
 
       if (!targetSections.any((e) => e.sectionId == item.sectionId)) {
         return;
-      }
-
-      if (!await _waitForEnrollment(item.sectionId)) {
-        if (sourceWasDropped && replacement != null) {
-          await _restoreReplacementSource(replacement);
-        }
-        throw StateError('Connect did not confirm the new enrollment');
       }
 
       await _recordSuccess(item, replacement: replacement);
@@ -1022,17 +1022,10 @@ class AdvisingAutoEngine extends ChangeNotifier {
           publicKey: publicKey!,
           phase: phase,
         );
-        final enrolled = await _service.fetchAdvisedSections(
-          portfolioId!,
-          phase: phase,
-          publicKey: publicKey!,
+        addLog(
+          'Restored ${replacement.courseCode} Sec ${replacement.sectionName}',
         );
-        if (enrolled.any((entry) => entry.sectionId == replacement.sectionId)) {
-          addLog(
-            'Restored ${replacement.courseCode} Sec ${replacement.sectionName}',
-          );
-          return;
-        }
+        return;
       } catch (error) {
         if (attempt == 5) {
           addLog(
@@ -1042,7 +1035,7 @@ class AdvisingAutoEngine extends ChangeNotifier {
           return;
         }
       }
-      await Future<void>.delayed(const Duration(milliseconds: 40));
+      await Future<void>.delayed(const Duration(milliseconds: 20));
     }
   }
 
