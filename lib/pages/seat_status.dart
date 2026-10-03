@@ -585,7 +585,9 @@ class _SeatStatusCard extends StatelessWidget {
               ],
             ),
           ],
-          if (item.remaining >= 0 || item.consumed >= 0 || item.total >= 0) ...[
+          if (item.total >= 0 ||
+              item.consumed >= 0 ||
+              item.remaining != -1) ...[
             const Gap(12),
             Divider(color: textSecondary.withValues(alpha: 0.2), height: 1),
             const Gap(12),

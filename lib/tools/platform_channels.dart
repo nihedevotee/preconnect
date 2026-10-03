@@ -11,4 +11,5 @@ abstract final class PlatformChannels {
   static const store = 'preconnect/store';
   static const appUpdate = 'preconnect/app_update';
   static const appUpdateEvents = 'preconnect/app_update_events';
+  static const advisingBackground = 'preconnect/advising_background';
 }

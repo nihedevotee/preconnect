@@ -12,6 +12,7 @@ class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate,
   UIDocumentInteractionControllerDelegate
 {
   private var documentController: UIDocumentInteractionController?
+  private var advisingBackgroundTask: UIBackgroundTaskIdentifier = .invalid
 
   private func cacheShortcutAction(_ type: String) {
     UserDefaults.standard.set(type, forKey: preconnectPendingShortcutActionKey)
@@ -39,6 +40,7 @@ class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate,
       registerStoreChannel(binaryMessenger: controller.binaryMessenger)
       registerFileChannel(binaryMessenger: controller.binaryMessenger)
       registerCalendarChannel(binaryMessenger: controller.binaryMessenger)
+      registerAdvisingBackgroundChannel(binaryMessenger: controller.binaryMessenger)
       IosNetworkAssist.register(binaryMessenger: controller.binaryMessenger)
     }
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
@@ -83,6 +85,11 @@ class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate,
     }
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "PreConnectCalendar") {
       registerCalendarChannel(binaryMessenger: registrar.messenger())
+    }
+    if let registrar = engineBridge.pluginRegistry.registrar(
+      forPlugin: "PreConnectAdvisingBackground")
+    {
+      registerAdvisingBackgroundChannel(binaryMessenger: registrar.messenger())
     }
 
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
@@ -520,6 +527,53 @@ class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate,
             }
           }
           result(false)
+        }
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+
+  private func registerAdvisingBackgroundChannel(binaryMessenger: FlutterBinaryMessenger) {
+    let channel = FlutterMethodChannel(
+      name: "preconnect/advising_background",
+      binaryMessenger: binaryMessenger
+    )
+    channel.setMethodCallHandler { [weak self] call, result in
+      guard let self else {
+        result(FlutterError(code: "UNAVAILABLE", message: "AppDelegate unavailable", details: nil))
+        return
+      }
+      switch call.method {
+      case "start":
+        DispatchQueue.main.async {
+          UIApplication.shared.isIdleTimerDisabled = true
+          if self.advisingBackgroundTask == .invalid {
+            self.advisingBackgroundTask = UIApplication.shared.beginBackgroundTask(
+              withName: "PreConnectAdvisingTask"
+            ) {
+              UIApplication.shared.endBackgroundTask(self.advisingBackgroundTask)
+              self.advisingBackgroundTask = .invalid
+            }
+          }
+          result(true)
+        }
+      case "update":
+        result(true)
+      case "stop":
+        DispatchQueue.main.async {
+          UIApplication.shared.isIdleTimerDisabled = false
+          if self.advisingBackgroundTask != .invalid {
+            UIApplication.shared.endBackgroundTask(self.advisingBackgroundTask)
+            self.advisingBackgroundTask = .invalid
+          }
+          result(true)
+        }
+      case "setKeepAwake":
+        let enable = (call.arguments as? [String: Any])?["enable"] as? Bool ?? false
+        DispatchQueue.main.async {
+          UIApplication.shared.isIdleTimerDisabled = enable
+          result(true)
         }
       default:
         result(FlutterMethodNotImplemented)

@@ -202,6 +202,7 @@ class MainActivity : FlutterFragmentActivity() {
                 this,
                 flutterEngine.dartExecutor.binaryMessenger,
             ).also(CalendarChannel::configure)
+        AdvisingBackgroundChannel(this).configure(flutterEngine.dartExecutor.binaryMessenger)
     }
 
     private fun configureNetworkAssistChannels(flutterEngine: FlutterEngine) {

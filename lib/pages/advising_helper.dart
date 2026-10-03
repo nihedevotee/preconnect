@@ -94,6 +94,7 @@ class _AdvisingHelperPageState extends State<AdvisingHelperPage> {
     if (_engine.isRunning) _engine.stop();
     final generation = ++_loadGeneration;
     final phase = _phase;
+    await _engine.loadQueueFromStorage(phase);
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -240,6 +241,25 @@ class _AdvisingHelperPageState extends State<AdvisingHelperPage> {
         phase == _phase) {
       setState(() => _seatDetails = details);
     }
+  }
+
+  SeatStatusDetailsResponse? _detailForSection(
+    int sectionId, {
+    String? courseCode,
+    String? sectionName,
+  }) {
+    final byId = _seatDetails[sectionId];
+    if (byId != null) return byId;
+    if (courseCode == null || sectionName == null) return null;
+    final normalizedCode = courseCode.trim().toUpperCase();
+    final normalizedSec = sectionName.trim();
+    for (final entry in _seatDetails.values) {
+      if (entry.courseCode.trim().toUpperCase() == normalizedCode &&
+          entry.sectionName.trim() == normalizedSec) {
+        return entry;
+      }
+    }
+    return null;
   }
 
   List<SeatStatusDetailsResponse> get _filteredSections {
@@ -543,7 +563,8 @@ class _AdvisingHelperPageState extends State<AdvisingHelperPage> {
                         selected: _phase == phase,
                         onSelected: (selected) {
                           if (selected && _phase != phase) {
-                            _engine.reset();
+                            unawaited(_engine.saveQueueToStorage(_phase));
+                            _engine.reset(keepQueue: false);
                             setState(() {
                               _phase = phase;
                               _enrolled = const [];
@@ -786,7 +807,11 @@ class _AdvisingHelperPageState extends State<AdvisingHelperPage> {
       itemCount: _enrolled.length,
       itemBuilder: (context, index) {
         final sec = _enrolled[index];
-        final detail = _seatDetails[sec.sectionId];
+        final detail = _detailForSection(
+          sec.sectionId,
+          courseCode: sec.courseCode,
+          sectionName: sec.sectionName,
+        );
 
         return Padding(
           padding: const EdgeInsets.only(bottom: 12),
@@ -909,8 +934,18 @@ class _AdvisingHelperPageState extends State<AdvisingHelperPage> {
                       setState(() => _showAllActivityLogs = false);
                       _engine.clearActivityLogs();
                     },
-                    child: const Text('Clear'),
+                    child: const Text('Clear Logs'),
                   ),
+                  if (queue.isNotEmpty)
+                    TextButton(
+                      onPressed: _engine.isRunning
+                          ? null
+                          : () {
+                              _engine.clearQueue();
+                              if (mounted) setState(() {});
+                            },
+                      child: const Text('Clear Queue'),
+                    ),
                 ],
               ),
               const Gap(6),
@@ -949,7 +984,11 @@ class _AdvisingHelperPageState extends State<AdvisingHelperPage> {
         final item = queue[queueIndex];
         final isAdded = item.status == TargetSectionStatus.added;
         final isAdding = item.status == TargetSectionStatus.adding;
-        final detail = _seatDetails[item.sectionId];
+        final detail = _detailForSection(
+          item.sectionId,
+          courseCode: item.courseCode,
+          sectionName: item.sectionName,
+        );
         final replacement = item.replacement;
         final replacementPriority = replacement == null
             ? 0
@@ -1009,13 +1048,16 @@ class _AdvisingHelperPageState extends State<AdvisingHelperPage> {
                     ),
                   )
                 : isAdded
-                ? const Padding(
-                    padding: EdgeInsets.all(8),
-                    child: Icon(
+                ? IconButton(
+                    tooltip: 'Remove from queue',
+                    icon: const Icon(
                       Icons.check_circle_rounded,
                       color: AppPalette.accent,
                       size: 26,
                     ),
+                    onPressed: _engine.isRunning
+                        ? null
+                        : () => _engine.removeSectionFromQueue(item.sectionId),
                   )
                 : replacement == null
                 ? IconButton(
@@ -1391,7 +1433,7 @@ class _AdvisingSeatStatusCard extends StatelessWidget {
               ],
             ),
           ],
-          if (remaining >= 0 || consumed >= 0 || total >= 0) ...[
+          if (total >= 0 || consumed >= 0 || remaining != -1) ...[
             const Gap(12),
             Divider(color: textSecondary.withValues(alpha: 0.2), height: 1),
             const Gap(12),

@@ -5,6 +5,9 @@ import 'package:preconnect/api/api_client.dart';
 import 'package:preconnect/api/api_config.dart';
 import 'package:preconnect/api/seat_status.dart';
 import 'package:preconnect/model/advising_phase.dart';
+import 'package:preconnect/tools/advising_background.dart';
+import 'package:preconnect/tools/app_storage.dart';
+import 'package:preconnect/tools/storage_keys.dart';
 
 enum TargetSectionStatus {
   idle,
@@ -144,6 +147,39 @@ class TargetSectionItem {
   });
 
   int get remainingSeats => capacity - consumedSeat;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'sectionId': sectionId,
+    'courseId': courseId,
+    'courseCode': courseCode,
+    if (courseName != null) 'courseName': courseName,
+    'sectionName': sectionName,
+    'capacity': capacity,
+    'consumedSeat': consumedSeat,
+    'courseCredit': courseCredit,
+    if (labSectionId != null) 'labSectionId': labSectionId,
+    if (labSectionName != null) 'labSectionName': labSectionName,
+    if (replacement != null) 'replacement': replacement!.toJson(),
+  };
+
+  factory TargetSectionItem.fromJson(Map<String, dynamic> json) {
+    final repMap = json['replacement'] as Map<String, dynamic>?;
+    return TargetSectionItem(
+      sectionId: _requiredInt(json, 'sectionId'),
+      courseId: _requiredInt(json, 'courseId'),
+      courseCode: _requiredString(json, 'courseCode'),
+      courseName: _nullableString(json, 'courseName'),
+      sectionName: _requiredString(json, 'sectionName'),
+      capacity: _nullableInt(json, 'capacity') ?? 0,
+      consumedSeat: _nullableInt(json, 'consumedSeat') ?? 0,
+      courseCredit: _nullableInt(json, 'courseCredit') ?? 0,
+      labSectionId: _nullableInt(json, 'labSectionId'),
+      labSectionName: _nullableString(json, 'labSectionName'),
+      replacement: repMap != null
+          ? AdvisingReplacementSource.fromJson(repMap)
+          : null,
+    );
+  }
 }
 
 class AdvisingReplacementSource {
@@ -158,6 +194,20 @@ class AdvisingReplacementSource {
   final String sectionName;
 
   String get groupKey => 'replace:$sectionId';
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'sectionId': sectionId,
+    'courseCode': courseCode,
+    'sectionName': sectionName,
+  };
+
+  factory AdvisingReplacementSource.fromJson(Map<String, dynamic> json) {
+    return AdvisingReplacementSource(
+      sectionId: _requiredInt(json, 'sectionId'),
+      courseCode: _requiredString(json, 'courseCode'),
+      sectionName: _requiredString(json, 'sectionName'),
+    );
+  }
 }
 
 int _requiredInt(Map<String, dynamic> json, String key) {
@@ -465,7 +515,7 @@ class AdvisingAutoEngine extends ChangeNotifier {
   bool clearCompletedQueue() {
     if (!hasCompletedQueue) return false;
     if (isRunning) stop();
-    targetSections.clear();
+    unawaited(saveQueueToStorage());
     notifyListeners();
     return true;
   }
@@ -478,6 +528,47 @@ class AdvisingAutoEngine extends ChangeNotifier {
       activityLogs.removeLast();
     }
     notifyListeners();
+  }
+
+  Future<void> saveQueueToStorage([AdvisingPhase? targetPhase]) async {
+    final p = targetPhase ?? (tryPhase);
+    if (p == null) return;
+    try {
+      final key = StorageKeys.advisingTargetSections(p.name);
+      final jsonList = targetSections.map((e) => e.toJson()).toList();
+      await AppStorage.instance.setString(key, jsonEncode(jsonList));
+    } catch (_) {}
+  }
+
+  Future<void> loadQueueFromStorage(AdvisingPhase targetPhase) async {
+    if (isRunning) return;
+    try {
+      phase = targetPhase;
+      final key = StorageKeys.advisingTargetSections(targetPhase.name);
+      final raw = await AppStorage.instance.getString(key);
+      if (raw == null || raw.trim().isEmpty) return;
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return;
+      targetSections.clear();
+      for (final entry in decoded) {
+        if (entry is Map<String, dynamic>) {
+          targetSections.add(TargetSectionItem.fromJson(entry));
+        } else if (entry is Map) {
+          targetSections.add(
+            TargetSectionItem.fromJson(entry.cast<String, dynamic>()),
+          );
+        }
+      }
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  AdvisingPhase? get tryPhase {
+    try {
+      return phase;
+    } catch (_) {
+      return null;
+    }
   }
 
   void addSectionToQueue(TargetSectionItem item) {
@@ -493,6 +584,7 @@ class AdvisingAutoEngine extends ChangeNotifier {
         '${item.courseCode} Sec ${item.sectionName}',
       );
     }
+    unawaited(saveQueueToStorage());
   }
 
   int _replacementPriority(TargetSectionItem item) {
@@ -525,6 +617,7 @@ class AdvisingAutoEngine extends ChangeNotifier {
       '${item.courseCode} Sec ${item.sectionName} moved to replacement '
       'priority ${nextGroupIndex + 1}',
     );
+    unawaited(saveQueueToStorage());
   }
 
   void removeSectionFromQueue(int sectionId) {
@@ -532,12 +625,14 @@ class AdvisingAutoEngine extends ChangeNotifier {
     if (index != -1) {
       final item = targetSections.removeAt(index);
       addLog('Removed: ${item.courseCode} Section ${item.sectionName}');
+      unawaited(saveQueueToStorage());
     }
   }
 
   void clearQueue() {
     targetSections.clear();
     addLog('Queue cleared');
+    unawaited(saveQueueToStorage());
     notifyListeners();
   }
 
@@ -546,7 +641,7 @@ class AdvisingAutoEngine extends ChangeNotifier {
     notifyListeners();
   }
 
-  void reset() {
+  void reset({bool keepQueue = false}) {
     _runGeneration++;
     isRunning = false;
     _loopTimer?.cancel();
@@ -556,8 +651,20 @@ class AdvisingAutoEngine extends ChangeNotifier {
     publicKey = null;
     onSectionAdded = null;
     onReplacementCompleted = null;
-    targetSections.clear();
+    if (keepQueue) {
+      for (final item in targetSections) {
+        if (item.status == TargetSectionStatus.watching ||
+            item.status == TargetSectionStatus.adding) {
+          item.status = TargetSectionStatus.idle;
+        }
+      }
+    } else {
+      targetSections.clear();
+      unawaited(saveQueueToStorage());
+    }
     activityLogs.clear();
+    unawaited(AdvisingBackground.stop());
+    unawaited(AdvisingBackground.setKeepAwake(false));
     notifyListeners();
   }
 
@@ -578,6 +685,13 @@ class AdvisingAutoEngine extends ChangeNotifier {
     _lastOfferedSectionsError = null;
     isRunning = true;
     addLog('Advising Helper started');
+    unawaited(
+      AdvisingBackground.start(
+        title: 'Advising Helper Active',
+        message: 'Monitoring ${targetSections.length} target section(s)',
+      ),
+    );
+    unawaited(AdvisingBackground.setKeepAwake(true));
 
     _loopTimer?.cancel();
     _loopTimer = Timer.periodic(const Duration(milliseconds: 250), (_) {
@@ -598,6 +712,8 @@ class AdvisingAutoEngine extends ChangeNotifier {
         item.status = TargetSectionStatus.idle;
       }
     }
+    unawaited(AdvisingBackground.stop());
+    unawaited(AdvisingBackground.setKeepAwake(false));
     addLog('Advising Helper stopped');
   }
 
@@ -885,6 +1001,7 @@ class AdvisingAutoEngine extends ChangeNotifier {
           entry.sectionId == item.sectionId ||
           entry.replacement?.groupKey == rep.groupKey,
     );
+    unawaited(saveQueueToStorage());
     onReplacementCompleted?.call();
     if (targetSections.isEmpty) stop();
     notifyListeners();

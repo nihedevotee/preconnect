@@ -61,4 +61,6 @@ class StorageKeys {
       'exammap_mid_${semesterSessionId}_v1';
   static String examMapFinal(int semesterSessionId) =>
       'exammap_final_${semesterSessionId}_v1';
+  static String advisingTargetSections(String phase) =>
+      'advising_target_sections_${phase}_v1';
 }
