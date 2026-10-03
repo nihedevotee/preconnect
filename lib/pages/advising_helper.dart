@@ -1038,6 +1038,8 @@ class _AdvisingHelperPageState extends State<AdvisingHelperPage> {
                 ? null
                 : 'Priority $replacementPriority • replaces '
                       '${replacement.courseCode} Sec ${replacement.sectionName}',
+            statusMessage: item.message,
+            isError: item.status == TargetSectionStatus.failed,
             action: isAdding
                 ? const Padding(
                     padding: EdgeInsets.all(8),
@@ -1207,6 +1209,8 @@ class _AdvisingSeatStatusCard extends StatelessWidget {
     this.isPinned = false,
     this.onTap,
     this.badge,
+    this.statusMessage,
+    this.isError = false,
   });
 
   final String courseCode;
@@ -1233,6 +1237,8 @@ class _AdvisingSeatStatusCard extends StatelessWidget {
   final bool isPinned;
   final VoidCallback? onTap;
   final String? badge;
+  final String? statusMessage;
+  final bool isError;
 
   @override
   Widget build(BuildContext context) {
@@ -1461,6 +1467,26 @@ class _AdvisingSeatStatusCard extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ],
+          if (statusMessage != null && statusMessage!.trim().isNotEmpty) ...[
+            const Gap(10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: (isError ? AppPalette.danger : AppPalette.primary)
+                    .withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                statusMessage!.trim(),
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: isError ? AppPalette.danger : textSecondary,
+                ),
+              ),
             ),
           ],
         ],

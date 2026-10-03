@@ -404,7 +404,7 @@ class AdvisingHelperService {
         }
       } catch (_) {}
     }
-    return SeatStatusService().fetchRealtimeSections();
+    return SeatStatusService().preloadData(forceRefresh: false);
   }
 
   Future<void> addSection({
@@ -507,6 +507,7 @@ class AdvisingAutoEngine extends ChangeNotifier {
   bool isRunning = false;
   bool _isTicking = false;
   String? _lastOfferedSectionsError;
+  Map<int, SeatStatusDetailsResponse>? _lastKnownDetails;
   int _runGeneration = 0;
   Timer? _loopTimer;
   String? portfolioId;
@@ -654,6 +655,7 @@ class AdvisingAutoEngine extends ChangeNotifier {
     _loopTimer?.cancel();
     _loopTimer = null;
     _lastOfferedSectionsError = null;
+    _lastKnownDetails = null;
     portfolioId = null;
     publicKey = null;
     onSectionAdded = null;
@@ -750,20 +752,23 @@ class AdvisingAutoEngine extends ChangeNotifier {
           phase: phase,
           publicKey: publicKey,
         );
+        _lastKnownDetails = detailsMap;
       } catch (error) {
         if (!isRunning || runGeneration != _runGeneration) return;
         final message = advisingErrorMessage(error);
-        for (final item in pending) {
-          item.status = TargetSectionStatus.failed;
-          item.message = message;
-        }
         if (_lastOfferedSectionsError != message) {
           _lastOfferedSectionsError = message;
-          addLog('Failed to refresh realtime Connect sections: $message');
-        } else {
-          notifyListeners();
+          addLog('Realtime Connect refresh warning: $message');
         }
-        return;
+        detailsMap = _lastKnownDetails;
+        if (detailsMap == null) {
+          for (final item in pending) {
+            item.status = TargetSectionStatus.watching;
+            item.message = message;
+          }
+          notifyListeners();
+          return;
+        }
       }
       if (!isRunning || runGeneration != _runGeneration) return;
       _lastOfferedSectionsError = null;
