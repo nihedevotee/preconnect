@@ -116,8 +116,8 @@ class ApiConfig {
   }) =>
       '/adv/v1/advising/sections?studentPortfolioId=$portfolioId&phase=${phase.queryValue}';
 
-  static String advisingConfirmPath(String sessionId) =>
-      '/adv/v1/advising/$sessionId/confirm';
+  static String advisingConfirmPath(String portfolioId) =>
+      '/adv/v1/student-courses/$portfolioId/confirm';
 
   static String wishlistPath(String studentId) =>
       '/adv/v1/advising/$studentId/active-wishlist-sessions';

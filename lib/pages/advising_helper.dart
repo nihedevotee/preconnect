@@ -42,6 +42,7 @@ class _AdvisingHelperPageState extends State<AdvisingHelperPage> {
   String? _sessionId;
   String? _enrolledError;
   AdvisingSectionRecord? _replacementSource;
+  bool _isConfirming = false;
 
   late AdvisingPhase _phase;
   List<AdvisingSectionRecord> _enrolled = const [];
@@ -326,6 +327,54 @@ class _AdvisingHelperPageState extends State<AdvisingHelperPage> {
       confirmColor: AppPalette.danger,
       onConfirm: () => _drop(sec),
     );
+  }
+
+  Future<void> _promptConfirmAdvising() async {
+    if (_portfolioId == null || _publicKey == null || _enrolled.isEmpty) return;
+    final totalCredits = _enrolled.fold<int>(
+      0,
+      (sum, e) => sum + e.courseCredit,
+    );
+    await showAppConfirmationWithActionDialog(
+      context,
+      icon: Icons.check_circle_outline_rounded,
+      title: 'Confirm Advising?',
+      message:
+          'You are about to confirm and finalize your advising registration for ${_enrolled.length} enrolled section(s) ($totalCredits credits). Are you sure?',
+      confirmLabel: 'Confirm Advising',
+      cancelLabel: 'Cancel',
+      confirmColor: AppPalette.accent,
+      onConfirm: _performConfirmAdvising,
+    );
+  }
+
+  Future<void> _performConfirmAdvising() async {
+    final portfolioId = _portfolioId;
+    final publicKey = _publicKey;
+    if (portfolioId == null || publicKey == null) return;
+    setState(() => _isConfirming = true);
+    try {
+      await _service.confirmAdvising(
+        portfolioId: portfolioId,
+        publicKey: publicKey,
+        phase: _phase,
+      );
+      if (mounted) {
+        showAppSnackBar(context, 'Advising confirmed successfully! 🎉');
+      }
+      await _refreshEnrolled();
+    } catch (e) {
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          'Failed to confirm advising: ${advisingErrorMessage(e)}',
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isConfirming = false);
+      }
+    }
   }
 
   Future<void> _beginReplacement(AdvisingSectionRecord sec) async {
@@ -620,15 +669,30 @@ class _AdvisingHelperPageState extends State<AdvisingHelperPage> {
               ),
             ),
           ),
-          if (queue.isNotEmpty)
+          if (queue.isNotEmpty || _enrolled.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-              child: Center(
-                child: AppActionButton(
-                  key: const ValueKey('advising-auto-add-button'),
-                  onPressed: _toggleEngine,
-                  label: _engine.isRunning ? 'Stop' : 'Start',
-                ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (queue.isNotEmpty) ...[
+                    AppActionButton(
+                      key: const ValueKey('advising-auto-add-button'),
+                      onPressed: _toggleEngine,
+                      label: _engine.isRunning ? 'Stop' : 'Start',
+                    ),
+                    if (_enrolled.isNotEmpty) const Gap(10),
+                  ],
+                  if (_enrolled.isNotEmpty)
+                    AppActionButton(
+                      key: const ValueKey('advising-confirm-button'),
+                      icon: Icons.check_circle_outline_rounded,
+                      label: 'Confirm Advising',
+                      isLoading: _isConfirming,
+                      foregroundColor: AppPalette.accent,
+                      onPressed: _isConfirming ? null : _promptConfirmAdvising,
+                    ),
+                ],
               ),
             ),
           if (_replacementSource != null)

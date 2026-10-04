@@ -465,7 +465,6 @@ class AdvisingHelperService {
 
   Future<void> confirmAdvising({
     required String portfolioId,
-    required String sessionId,
     required String publicKey,
     required AdvisingPhase phase,
   }) async {
@@ -473,21 +472,17 @@ class AdvisingHelperService {
       publicKey: publicKey,
       phase: phase,
     );
-
-    final payload = jsonEncode(<String, dynamic>{
-      'studentPortfolioId': int.parse(portfolioId),
-      'sessionId': sessionId,
-    });
+    headers['Content-Type'] = 'text/plain';
 
     final url =
-        '${ApiConfig.connectApiBase}${ApiConfig.advisingConfirmPath(sessionId)}';
+        '${ApiConfig.connectApiBase}${ApiConfig.advisingConfirmPath(portfolioId)}';
 
     await _client.authenticatedRequest(
       'POST',
       url,
-      body: payload,
+      body: '',
       additionalHeaders: headers,
-      acceptedStatusCodes: const <int>{200},
+      acceptedStatusCodes: const <int>{200, 201, 204},
     );
   }
 }
