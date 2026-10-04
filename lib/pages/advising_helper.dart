@@ -646,25 +646,6 @@ class _AdvisingHelperPageState extends State<AdvisingHelperPage> {
                         ),
                       ),
                     ),
-                  if (_enrolled.isNotEmpty)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppPalette.accent.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        '${_enrolled.fold<int>(0, (sum, e) => sum + e.courseCredit)} Cr Enrolled',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: AppPalette.accent,
-                        ),
-                      ),
-                    ),
                 ],
               ),
             ),
