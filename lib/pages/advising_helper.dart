@@ -42,6 +42,7 @@ class _AdvisingHelperPageState extends State<AdvisingHelperPage> {
   String? _enrolledError;
   AdvisingSectionRecord? _replacementSource;
   bool _isConfirming = false;
+  final Set<int> _addingSectionIds = <int>{};
 
   late AdvisingPhase _phase;
   List<AdvisingSectionRecord> _enrolled = const [];
@@ -202,9 +203,10 @@ class _AdvisingHelperPageState extends State<AdvisingHelperPage> {
     if (_isLoading || _isRefreshingEnrolled) return;
     _isRefreshingEnrolled = true;
     try {
-      await _refreshEnrolled();
-      if (!_engine.isRunning) {
-        await _refreshSeats();
+      if (_engine.isRunning) {
+        await _refreshEnrolled();
+      } else {
+        await Future.wait([_refreshEnrolled(), _refreshSeats()]);
       }
     } catch (_) {
     } finally {
@@ -400,6 +402,33 @@ class _AdvisingHelperPageState extends State<AdvisingHelperPage> {
     setState(() => _replacementSource = null);
   }
 
+  Future<void> _addSection(SeatStatusDetailsResponse s) async {
+    final portfolioId = _portfolioId;
+    final publicKey = _publicKey;
+    if (portfolioId == null || publicKey == null) return;
+    if (_addingSectionIds.contains(s.sectionId)) return;
+    setState(() => _addingSectionIds.add(s.sectionId));
+    try {
+      await _service.addSection(
+        portfolioId: portfolioId,
+        sectionId: s.sectionId,
+        publicKey: publicKey,
+        phase: _phase,
+      );
+      _engine.addLog('Added ${s.courseCode} Sec ${s.sectionName}');
+      if (mounted) {
+        showAppSnackBar(context, 'Added ${s.courseCode} Sec ${s.sectionName}');
+      }
+      await Future.wait([_refreshEnrolled(), _refreshSeats()]);
+    } catch (e) {
+      if (mounted) showAppSnackBar(context, advisingErrorMessage(e));
+    } finally {
+      if (mounted) {
+        setState(() => _addingSectionIds.remove(s.sectionId));
+      }
+    }
+  }
+
   Future<void> _drop(AdvisingSectionRecord sec) async {
     if (_portfolioId == null || _publicKey == null) return;
     if (!mounted) return;
@@ -421,7 +450,7 @@ class _AdvisingHelperPageState extends State<AdvisingHelperPage> {
           'Dropped ${sec.courseCode} Sec ${sec.sectionName}',
         );
       }
-      await _refreshEnrolled();
+      await Future.wait([_refreshEnrolled(), _refreshSeats()]);
     } catch (e) {
       if (mounted) showAppSnackBar(context, e.toString());
     } finally {
@@ -1178,6 +1207,10 @@ class _AdvisingHelperPageState extends State<AdvisingHelperPage> {
     final isEnrolled = _enrolled.any(
       (item) => item.sectionId == sectionDetails.sectionId,
     );
+    final isAddingDirectly = _addingSectionIds.contains(
+      sectionDetails.sectionId,
+    );
+    final hasSeats = sectionDetails.capacity - sectionDetails.consumedSeat > 0;
     return _AdvisingSeatStatusCard(
       courseCode: sectionDetails.courseCode,
       sectionName: sectionDetails.sectionName,
@@ -1213,15 +1246,42 @@ class _AdvisingHelperPageState extends State<AdvisingHelperPage> {
                 size: 28,
               ),
             )
-          : IconButton(
-              icon: Icon(
-                isQueued
-                    ? Icons.check_box_rounded
-                    : Icons.check_box_outline_blank_rounded,
-                color: isQueued ? AppPalette.accent : textSecondary,
-                size: 28,
+          : isAddingDirectly
+          ? const Padding(
+              padding: EdgeInsets.all(8),
+              child: SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2),
               ),
-              onPressed: () => _toggleQueue(sectionDetails),
+            )
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (hasSeats)
+                  IconButton(
+                    tooltip: 'Add now',
+                    icon: const Icon(
+                      Icons.add_circle_outline_rounded,
+                      color: AppPalette.accent,
+                      size: 26,
+                    ),
+                    onPressed: () => _addSection(sectionDetails),
+                  ),
+                IconButton(
+                  tooltip: isQueued
+                      ? 'Remove from queue'
+                      : 'Queue for auto-add',
+                  icon: Icon(
+                    isQueued
+                        ? Icons.check_box_rounded
+                        : Icons.check_box_outline_blank_rounded,
+                    color: isQueued ? AppPalette.accent : textSecondary,
+                    size: 26,
+                  ),
+                  onPressed: () => _toggleQueue(sectionDetails),
+                ),
+              ],
             ),
     );
   }
