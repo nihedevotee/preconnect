@@ -39,7 +39,6 @@ class _AdvisingHelperPageState extends State<AdvisingHelperPage> {
   String? _errorMessage;
   String? _portfolioId;
   String? _publicKey;
-  String? _sessionId;
   String? _enrolledError;
   AdvisingSectionRecord? _replacementSource;
   bool _isConfirming = false;
@@ -143,7 +142,6 @@ class _AdvisingHelperPageState extends State<AdvisingHelperPage> {
       if (!mounted || generation != _loadGeneration) return;
       _portfolioId = portfolioId;
       _publicKey = publicKey;
-      _sessionId = sessionId;
       _enrolledError = enrolledError;
       if (_engine.isRunning) {
         _engine.onSectionAdded = _refreshEnrolled;
@@ -542,9 +540,7 @@ class _AdvisingHelperPageState extends State<AdvisingHelperPage> {
         return;
       }
       final key =
-          _publicKey ??
-          _sessionId ??
-          DateTime.now().millisecondsSinceEpoch.toString();
+          _publicKey ?? DateTime.now().millisecondsSinceEpoch.toString();
       _publicKey = key;
       _engine.start(
         portfolioId: portfolioId,
@@ -626,7 +622,6 @@ class _AdvisingHelperPageState extends State<AdvisingHelperPage> {
                               _enrolled = const [];
                               _portfolioId = null;
                               _publicKey = null;
-                              _sessionId = null;
                               _errorMessage = null;
                               _enrolledError = null;
                               _replacementSource = null;
