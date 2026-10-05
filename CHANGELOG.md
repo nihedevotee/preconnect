@@ -5,8 +5,9 @@ Entries are written for students, not developers — plain language, no commit h
 
 ## [Unreleased]
 
-## [2.1.0] — 2026-10-01
+## [2.1.0] — 2026-10-05
 
+- Curriculum & Degree Progress: Added required and optional course filters, dynamic dropdown labels, and seamless EMB101 and DEV101 course equivalence recognition.
 - Class Schedule Accuracy: Enforced exact semester start and end dates across active routines, preventing courses from displaying before their official start date or after semester completion.
 - Schedule Navigation & Views: Eliminated duplicate course entries and cleaned up empty schedule states to avoid unnecessary Next Week prompts.
 - App Lock Security: Standardized app security with a consistent 1-minute background timeout for seamless re-authentication.
